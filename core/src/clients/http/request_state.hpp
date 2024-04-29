@@ -29,6 +29,7 @@
 
 #include <clients/http/destination_statistics.hpp>
 #include <clients/http/easy_wrapper.hpp>
+#include <clients/http/retry_budgets.hpp>
 #include <clients/http/testsuite.hpp>
 #include <crypto/helpers.hpp>
 #include <engine/ev/watcher/timer_watcher.hpp>
@@ -43,11 +44,12 @@ class ConnectTo;
 
 class RequestState : public std::enable_shared_from_this<RequestState> {
  public:
-  RequestState(impl::EasyWrapper&&, RequestStats&& req_stats,
-               const std::shared_ptr<DestinationStatistics>& dest_stats,
-               clients::dns::Resolver* resolver,
-               impl::PluginPipeline& plugin_pipeline,
-               const tracing::TracingManagerBase& tracing_manager);
+  RequestState(
+      impl::EasyWrapper&&, RequestStats&& req_stats,
+      const std::shared_ptr<DestinationStatistics>& dest_stats,
+      clients::dns::Resolver* resolver, impl::PluginPipeline& plugin_pipeline,
+      const tracing::TracingManagerBase& tracing_manager,
+      const std::shared_ptr<clients::http::RetryBudgets>& retry_budgets);
   ~RequestState();
 
   using Queue = concurrent::StringStreamQueue;
@@ -166,6 +168,10 @@ class RequestState : public std::enable_shared_from_this<RequestState> {
   bool IsDeadlineExpiredResponse(Status status_code);
   bool ShouldRetryResponse();
 
+  // retry budget
+  bool CheckRetryBudget();
+  void UpdateRetryBudget(std::error_code err);
+
   const std::string& GetLoggedOriginalUrl() const noexcept;
 
   static size_t StreamWriteFunction(char* ptr, size_t size, size_t nmemb,
@@ -227,6 +233,9 @@ class RequestState : public std::enable_shared_from_this<RequestState> {
     /// pointer to timer
     std::optional<engine::ev::TimerWatcher> timer;
   } retry_;
+
+  std::shared_ptr<clients::http::RetryBudgets> retry_budgets_;
+  std::error_code last_err_;
 
   std::optional<tracing::InPlaceSpan> span_storage_;
   std::optional<std::string> log_url_;

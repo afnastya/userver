@@ -344,6 +344,8 @@ httpclient.errors: http_error=timeout, version=2	RATE	0
 httpclient.errors: http_error=too-many-redirects, version=2	RATE	0
 httpclient.errors: http_error=unknown-error, version=2	RATE	0
 httpclient.event-loop-load.1min: version=2	GAUGE	0
+httpclient.limited-by-retry-budget: http_destination=http://localhost:00000/configs-service/configs/values, version=2	RATE	0
+httpclient.limited-by-retry-budget: version=2	RATE	0
 httpclient.last-time-to-start-us: version=2	GAUGE	0
 httpclient.pending-requests: version=2	GAUGE	0
 httpclient.pending-requests: http_destination=http://localhost:00000/configs-service/configs/values, version=2	GAUGE	0

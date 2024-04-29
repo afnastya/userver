@@ -792,6 +792,8 @@ class easy final : public std::enable_shared_from_this<easy> {
 
   void mark_retry();
 
+  const std::string& get_effective_host() const;
+
   clients::http::LocalStats get_local_stats();
 
   std::error_code rate_limit_error() const;
@@ -827,12 +829,15 @@ class easy final : public std::enable_shared_from_this<easy> {
   void mark_start_performing();
   void mark_open_socket();
 
+  void cache_effective_url_parts(const char* url_str);
+
   native::CURL* handle_{nullptr};
   multi* multi_;
   size_t request_counter_{0};
   size_t cancelled_request_max_{0};
   bool multi_registered_{false};
   std::string orig_url_str_;
+  std::string effective_url_host_;
   url url_;
   handler_type handler_;
   std::shared_ptr<std::istream> source_;

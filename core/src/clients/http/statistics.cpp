@@ -87,6 +87,11 @@ void RequestStats::AccountCancelledByDeadline() noexcept {
   ++stats_->cancelled_by_deadline_;
 }
 
+void RequestStats::AccountLimitedByRetryBudget() noexcept {
+  UASSERT(stats_);
+  ++stats_->limited_by_retry_budget_;
+}
+
 Statistics::ErrorGroup Statistics::ErrorCodeToGroup(std::error_code ec) {
   using ErrorCode = curl::errc::EasyErrorCode;
 
@@ -176,6 +181,7 @@ void DumpMetric(utils::statistics::Writer& writer,
 
   writer["timeout-updated-by-deadline"] = stats.timeout_updated_by_deadline;
   writer["cancelled-by-deadline"] = stats.cancelled_by_deadline;
+  writer["limited-by-retry-budget"] = stats.limited_by_retry_budget;
 
   writer["sockets"]["open"] = stats.multi.socket_open;
 }
@@ -216,6 +222,7 @@ InstanceStatistics::InstanceStatistics(const Statistics& other)
       retries(other.retries_.Load()),
       timeout_updated_by_deadline(other.timeout_updated_by_deadline_.Load()),
       cancelled_by_deadline(other.cancelled_by_deadline_.Load()),
+      limited_by_retry_budget(other.limited_by_retry_budget_.Load()),
       reply_status(other.reply_status_) {
   for (size_t i = 0; i < error_count.size(); i++)
     error_count[i] = other.error_count_[i].Load();
@@ -250,6 +257,7 @@ InstanceStatistics& InstanceStatistics::operator+=(
 
   timeout_updated_by_deadline += stat.timeout_updated_by_deadline;
   cancelled_by_deadline += stat.cancelled_by_deadline;
+  limited_by_retry_budget += stat.limited_by_retry_budget;
   reply_status += stat.reply_status;
 
   multi += stat.multi;

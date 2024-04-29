@@ -53,6 +53,7 @@ class Statistics;
 struct PoolStatistics;
 struct InstanceStatistics;
 class DestinationStatistics;
+class RetryBudgets;
 
 /// @ingroup userver_clients
 ///
@@ -67,6 +68,7 @@ class DestinationStatistics;
 class Client final {
  public:
   Client(ClientSettings settings, engine::TaskProcessor& fs_task_processor,
+         engine::TaskProcessor& main_task_processor,
          impl::PluginPipeline&& plugin_pipeline);
 
   ~Client();
@@ -175,6 +177,7 @@ class Client final {
   rcu::Variable<std::vector<std::string>> allowed_urls_extra_;
 
   std::shared_ptr<curl::ConnectRateLimiter> connect_rate_limiter_;
+  std::shared_ptr<RetryBudgets> retry_budgets_;
 
   clients::dns::Resolver* resolver_{nullptr};
   utils::NotNull<const tracing::TracingManagerBase*> tracing_manager_;

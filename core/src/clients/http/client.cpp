@@ -15,6 +15,7 @@
 
 #include <clients/http/destination_statistics.hpp>
 #include <clients/http/easy_wrapper.hpp>
+#include <clients/http/retry_budgets.hpp>
 #include <clients/http/statistics.hpp>
 #include <clients/http/testsuite.hpp>
 #include <crypto/openssl.hpp>
@@ -47,6 +48,7 @@ const tracing::TracingManagerBase* GetTracingManager(
 
 Client::Client(ClientSettings settings,
                engine::TaskProcessor& fs_task_processor,
+               engine::TaskProcessor& main_task_processor,
                impl::PluginPipeline&& plugin_pipeline)
     : deadline_propagation_config_(settings.deadline_propagation),
       cancellation_policy_(settings.cancellation_policy),
@@ -55,6 +57,7 @@ Client::Client(ClientSettings settings,
       fs_task_processor_(fs_task_processor),
       user_agent_(utils::GetUserverIdentifier()),
       connect_rate_limiter_(std::make_shared<curl::ConnectRateLimiter>()),
+      retry_budgets_(std::make_shared<RetryBudgets>(main_task_processor)),
       tracing_manager_(GetTracingManager(settings)),
       headers_propagator_(settings.headers_propagator),
       plugin_pipeline_(std::move(plugin_pipeline)) {
@@ -123,7 +126,8 @@ Request Client::CreateRequest() {
       return Request{
           std::move(wrapper),      statistics_[idx].CreateRequestStats(),
           destination_statistics_, resolver_,
-          plugin_pipeline_,        *tracing_manager_.GetBase()};
+          plugin_pipeline_,        *tracing_manager_.GetBase(),
+          retry_budgets_};
     } else {
       auto i = utils::RandRange(multis_.size());
       auto& multi = multis_[i];
@@ -136,7 +140,8 @@ Request Client::CreateRequest() {
         return Request{
             std::move(wrapper),      statistics_[i].CreateRequestStats(),
             destination_statistics_, resolver_,
-            plugin_pipeline_,        *tracing_manager_.GetBase()};
+            plugin_pipeline_,        *tracing_manager_.GetBase(),
+            retry_budgets_};
       } catch (engine::WaitInterruptedException&) {
         throw clients::http::CancelException();
       } catch (engine::TaskCancelledException&) {
@@ -281,6 +286,8 @@ void Client::SetConfig(const impl::Config& config) {
   connect_rate_limiter_->SetPerHostLimits(
       config.throttle.per_host_connect_limit,
       config.throttle.per_host_connect_rate);
+
+  retry_budgets_->SetRetryBudgetSettings(config.retry_budget.settings);
 
   proxy_.Assign(config.proxy);
 }

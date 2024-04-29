@@ -40,6 +40,7 @@ class RequestStats final {
 
   void AccountTimeoutUpdatedByDeadline() noexcept;
   void AccountCancelledByDeadline() noexcept;
+  void AccountLimitedByRetryBudget() noexcept;
 
  private:
   void StoreTiming() noexcept;
@@ -107,6 +108,7 @@ class Statistics {
   utils::statistics::RateCounter socket_open_{0};
   utils::statistics::RateCounter timeout_updated_by_deadline_;
   utils::statistics::RateCounter cancelled_by_deadline_;
+  utils::statistics::RateCounter limited_by_retry_budget_;
   utils::statistics::HttpCodes reply_status_;
 
   friend struct InstanceStatistics;
@@ -134,6 +136,7 @@ struct InstanceStatistics {
 
   utils::statistics::Rate timeout_updated_by_deadline;
   utils::statistics::Rate cancelled_by_deadline;
+  utils::statistics::Rate limited_by_retry_budget;
   utils::statistics::HttpCodes::Snapshot reply_status;
 
   MultiStats multi;

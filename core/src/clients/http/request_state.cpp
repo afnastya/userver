@@ -45,8 +45,8 @@ constexpr long kMaxRedirectCount = 10;
 constexpr int kEBMaxPower = 5;
 /// Base time for exponential backoff algorithm
 constexpr auto kEBBaseTime = std::chrono::milliseconds{25};
-/// Least http code that we treat as bad for exponential backoff algorithm
-constexpr Status kLeastBadHttpCodeForEB{500};
+/// Least http code that we treat as bad for retry algorithm
+constexpr Status kLeastBadHttpCodeForRetryAlgorithm{500};
 /// Least http code the the downstream service can use to report propagated
 /// deadline expiration
 constexpr Status kLeastHttpCodeForDeadlineExpired{400};
@@ -214,13 +214,15 @@ RequestState::RequestState(
     impl::EasyWrapper&& wrapper, RequestStats&& req_stats,
     const std::shared_ptr<DestinationStatistics>& dest_stats,
     clients::dns::Resolver* resolver, impl::PluginPipeline& plugin_pipeline,
-    const tracing::TracingManagerBase& tracing_manager)
+    const tracing::TracingManagerBase& tracing_manager,
+    const std::shared_ptr<clients::http::RetryBudgets>& retry_budgets)
     : easy_(std::move(wrapper)),
       stats_(std::move(req_stats)),
       dest_stats_(dest_stats),
       original_timeout_(kDefaultTimeout),
       remote_timeout_(original_timeout_),
       tracing_manager_{tracing_manager},
+      retry_budgets_(retry_budgets),
       is_cancelled_(false),
       errorbuffer_(),
       resolver_{resolver},
@@ -546,6 +548,9 @@ void RequestState::on_retry(std::shared_ptr<RequestState> holder,
               << tracing::impl::LogSpanAsLastNonCoro{
                      holder->span_storage_->Get()};
 
+  holder->last_err_ = err;
+  holder->UpdateRetryBudget(err);
+
   // We do not need to retry:
   // - if we got result and HTTP code is good
   // - if we used all attempts
@@ -590,13 +595,18 @@ void RequestState::on_retry(std::shared_ptr<RequestState> holder,
 }
 
 void RequestState::on_retry_timer(std::error_code err) {
-  // if there is no error with timer call perform, otherwise finish
-  if (!err)
-    perform_request([holder = shared_from_this()](std::error_code err) mutable {
+  // if there is no error with timer, check retry budget, otherwise finish
+  if (err) {
+    on_completed(shared_from_this(), err);
+  } else if (auto holder = shared_from_this(); holder->CheckRetryBudget()) {
+    perform_request([holder](std::error_code err) mutable {
       RequestState::on_retry(std::move(holder), err);
     });
-  else
-    on_completed(shared_from_this(), err);
+  } else {
+    holder->WithRequestStats(
+        [](RequestStats& stats) { stats.AccountLimitedByRetryBudget(); });
+    on_completed(holder, holder->last_err_);
+  }
 }
 
 void RequestState::ParseSingleCookie(const char* ptr, size_t size) {
@@ -880,7 +890,26 @@ bool RequestState::ShouldRetryResponse() {
     return !timeout_updated_by_deadline_ && retry_.on_fails;
   }
 
-  return status_code >= kLeastBadHttpCodeForEB;
+  return status_code >= kLeastBadHttpCodeForRetryAlgorithm;
+}
+
+bool RequestState::CheckRetryBudget() {
+  return retry_budgets_->CanRetry(easy().get_effective_host());
+}
+
+void RequestState::UpdateRetryBudget(std::error_code err) {
+  if (err == std::make_error_code(std::errc::operation_canceled)) {
+    return;
+  }
+
+  const auto status_code = static_cast<Status>(easy().get_response_code());
+  const auto host = easy().get_effective_host();
+
+  if (err || (status_code >= kLeastBadHttpCodeForRetryAlgorithm)) {
+    retry_budgets_->OnFailedRequest(host);
+  } else {
+    retry_budgets_->OnSuccessfulRequest(host);
+  }
 }
 
 void RequestState::AccountResponse(std::error_code err) {

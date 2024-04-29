@@ -23,7 +23,7 @@ std::shared_ptr<clients::http::Client> CreateHttpClient(
   static_config.tracing_manager = &kDefaultTracingManager;
 
   return std::make_shared<clients::http::Client>(
-      std::move(static_config), fs_task_processor,
+      std::move(static_config), fs_task_processor, fs_task_processor,
       std::vector<utils::NotNull<clients::http::Plugin*>>{});
 }
 
@@ -35,6 +35,7 @@ std::shared_ptr<clients::http::Client> CreateHttpClient(
 
   return std::make_shared<clients::http::Client>(
       std::move(static_config), engine::current_task::GetTaskProcessor(),
+      engine::current_task::GetTaskProcessor(),
       std::vector<utils::NotNull<clients::http::Plugin*>>{});
 }
 

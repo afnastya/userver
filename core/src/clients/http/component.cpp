@@ -72,12 +72,23 @@ constexpr dynamic_config::DefaultAsJsonString kThrottleDefaults{R"(
 }
 )"};
 
+constexpr dynamic_config::DefaultAsJsonString kRetryBudgetDefaults{R"(
+{
+  "settings": {
+    "max_tokens": 100.0,
+    "token_ratio": 0.1,
+    "enabled": false
+  }
+}
+)"};
+
 const dynamic_config::Key kClientConfig{
     clients::http::impl::ParseConfig,
     {
         {"HTTP_CLIENT_CONNECTION_POOL_SIZE", 1000},
         {"USERVER_HTTP_PROXY", ""},
         {"HTTP_CLIENT_CONNECT_THROTTLE", kThrottleDefaults},
+        {"HTTP_CLIENT_RETRY_BUDGET", kRetryBudgetDefaults},
     },
 };
 /// [docs map config sample]
@@ -93,6 +104,7 @@ HttpClient::HttpClient(const ComponentConfig& component_config,
           GetClientSettings(component_config, context),
           context.GetTaskProcessor(
               component_config["fs-task-processor"].As<std::string>()),
+          context.GetTaskProcessor("main-task-processor"),
           FindPlugins(component_config["plugins"].As<std::vector<std::string>>(
                           std::vector<std::string>()),
                       context)) {

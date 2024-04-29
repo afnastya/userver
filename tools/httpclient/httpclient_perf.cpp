@@ -188,6 +188,7 @@ void DoWork(const Config& config, const std::vector<std::string>& urls) {
   http::Client http_client{
       {"", config.io_threads, config.defer_events},
       tp,
+      tp,
       std::vector<utils::NotNull<clients::http::Plugin*>>{}};
   LOG_INFO() << "Client created";
 

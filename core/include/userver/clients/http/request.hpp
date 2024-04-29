@@ -15,6 +15,7 @@
 #include <userver/concurrent/queue.hpp>
 #include <userver/crypto/certificate.hpp>
 #include <userver/crypto/private_key.hpp>
+#include <userver/engine/task/task_processor_fwd.hpp>
 #include <userver/utils/impl/source_location.hpp>
 
 USERVER_NAMESPACE_BEGIN
@@ -38,6 +39,7 @@ struct DeadlinePropagationConfig;
 class RequestStats;
 class DestinationStatistics;
 struct TestsuiteConfig;
+class RetryBudgets;
 
 namespace impl {
 class EasyWrapper;
@@ -96,7 +98,8 @@ class Request final {
                    const std::shared_ptr<DestinationStatistics>& dest_stats,
                    clients::dns::Resolver* resolver,
                    impl::PluginPipeline& plugin_pipeline,
-                   const tracing::TracingManagerBase& tracing_manager);
+                   const tracing::TracingManagerBase& tracing_manager,
+                   const std::shared_ptr<RetryBudgets>& retry_budgets);
   /// @endcond
 
   /// Specifies method

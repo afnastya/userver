@@ -77,6 +77,13 @@ ThrottleConfig Parse(const formats::json::Value& value,
   return result;
 }
 
+RetryBudgetConfig Parse(const formats::json::Value& value,
+                        formats::parse::To<RetryBudgetConfig>) {
+  RetryBudgetConfig result;
+  result.settings = value.As<utils::RetryBudgetSettings>();
+  return result;
+}
+
 Config ParseConfig(const dynamic_config::DocsMap& docs_map) {
   Config result;
   result.connection_pool_size =
@@ -84,6 +91,8 @@ Config ParseConfig(const dynamic_config::DocsMap& docs_map) {
   result.proxy = docs_map.Get("USERVER_HTTP_PROXY").As<std::string>();
   result.throttle =
       docs_map.Get("HTTP_CLIENT_CONNECT_THROTTLE").As<ThrottleConfig>();
+  result.retry_budget =
+      docs_map.Get("HTTP_CLIENT_RETRY_BUDGET").As<RetryBudgetConfig>();
   return result;
 }
 
