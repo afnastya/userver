@@ -45,8 +45,8 @@ constexpr long kMaxRedirectCount = 10;
 constexpr int kEBMaxPower = 5;
 /// Base time for exponential backoff algorithm
 constexpr auto kEBBaseTime = std::chrono::milliseconds{25};
-/// Least http code that we treat as bad for exponential backoff algorithm
-constexpr Status kLeastBadHttpCodeForEB{500};
+/// Least http code that we treat as bad for retry algorithm
+constexpr Status kLeastBadHttpCodeForRetryAlgorithm{500};
 /// Least http code the the downstream service can use to report propagated
 /// deadline expiration
 constexpr Status kLeastHttpCodeForDeadlineExpired{400};
@@ -546,6 +546,10 @@ void RequestState::on_retry(std::shared_ptr<RequestState> holder,
               << tracing::impl::LogSpanAsLastNonCoro{
                      holder->span_storage_->Get()};
 
+  holder->easy().update_retry_budget(
+      err,
+      holder->easy().get_response_code() < kLeastBadHttpCodeForRetryAlgorithm);
+
   // We do not need to retry:
   // - if we got result and HTTP code is good
   // - if we used all attempts
@@ -556,8 +560,9 @@ void RequestState::on_retry(std::shared_ptr<RequestState> holder,
       (holder->retry_.current >= holder->retry_.retries) ||
       (err && !holder->retry_.on_fails) || holder->is_cancelled_.load();
 
-  if (not_need_retry) {
+  if (not_need_retry || !holder->easy().check_retry_budget()) {
     // finish if no need to retry
+    // or if the retry budget is empty
     RequestState::on_completed(std::move(holder), err);
   } else {
     // calculate backoff before retry
@@ -880,7 +885,7 @@ bool RequestState::ShouldRetryResponse() {
     return !timeout_updated_by_deadline_ && retry_.on_fails;
   }
 
-  return status_code >= kLeastBadHttpCodeForEB;
+  return status_code >= kLeastBadHttpCodeForRetryAlgorithm;
 }
 
 void RequestState::AccountResponse(std::error_code err) {

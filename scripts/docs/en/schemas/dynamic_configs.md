@@ -57,6 +57,59 @@ schema:
 Used by components::HttpClient, affects the behavior of clients::http::Client and all the clients that use it.
 
 
+@anchor HTTP_CLIENT_RETRY_BUDGET
+## HTTP_CLIENT_RETRY_BUDGET
+
+Per host token bucket retry budget and retry cicuit breaker.
+
+```
+yaml
+schema:
+    type: object
+    description: retry budget settings for each host
+    properties:
+        settings:
+            '$ref': '#/definitions/BaseSettings'
+    additionalProperties:
+        '$ref': '#/definitions/BaseSettings'
+    definitions:
+        BaseSettings:
+            type: object
+            additionalProperties: false
+            properties:
+                enabled:
+                    description: Enable retry budget for database
+                    type: boolean
+                max-tokens:
+                    description: Number of tokens to start with
+                    type: number
+                    maximum: 1000
+                    minimum: 1
+                token-ratio:
+                    description: Amount of tokens added on each successful request
+                    type: number
+                    maximum: 1
+                    minimum: 0.001
+            required:
+              - enabled
+              - max-tokens
+              - token-ratio
+```
+
+**Example:**
+```json
+{
+  "settings": {
+    "max-tokens": 100,
+    "token-ratio": 0.1,
+    "enabled": true
+  }
+}
+```
+
+Used by components::HttpClient, affects the behavior of clients::http::Client and all the clients that use it.
+
+
 @anchor HTTP_CLIENT_CONNECTION_POOL_SIZE
 ## HTTP_CLIENT_CONNECTION_POOL_SIZE
 Open connections pool size for curl (CURLMOPT_MAXCONNECTS). `-1` means

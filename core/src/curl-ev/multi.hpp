@@ -17,6 +17,7 @@
 #include <curl-ev/multi_statistics.hpp>
 #include <curl-ev/native.hpp>
 #include <curl-ev/ratelimit.hpp>
+#include <curl-ev/retry_budgets.hpp>
 
 USERVER_NAMESPACE_BEGIN
 
@@ -53,6 +54,11 @@ class multi final {
   MultiStatistics& Statistics() { return statistics_; }
 
   void CheckRateLimit(const char* url_str, std::error_code& ec);
+
+  void SetRetryBudgetSettings(const utils::RetryBudgetSettings& settings);
+  bool CheckRetryBudget(const std::string& host);
+  void UpdateRetryBudget(const std::string& host, const std::error_code& ec,
+                         bool successful_request);
 
   void SetMultiplexingEnabled(bool);
   void SetMaxHostConnections(long);
@@ -102,6 +108,7 @@ class multi final {
   engine::ev::ThreadControl& thread_control_;
   MultiStatistics statistics_;
   std::shared_ptr<ConnectRateLimiter> connect_rate_limiter_;
+  RetryBudgets retry_budgets_;
 };
 }  // namespace curl
 

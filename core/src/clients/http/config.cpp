@@ -77,6 +77,13 @@ ThrottleConfig Parse(const formats::json::Value& value,
   return result;
 }
 
+RetryBudgetConfig Parse(const formats::json::Value& value,
+                        formats::parse::To<RetryBudgetConfig>) {
+  RetryBudgetConfig result;
+  result.settings = value.As<utils::RetryBudgetSettings>();
+  return result;
+}
+
 Config ParseConfig(const dynamic_config::DocsMap& docs_map) {
   Config result;
   result.connection_pool_size =

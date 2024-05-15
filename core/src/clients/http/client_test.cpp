@@ -25,6 +25,7 @@
 #include <userver/logging/log.hpp>
 #include <userver/tracing/tracing.hpp>
 #include <userver/utils/async.hpp>
+#include <userver/utils/impl/userver_experiments.hpp>
 #include <userver/utils/userver_info.hpp>
 
 #include <userver/utest/http_client.hpp>
@@ -377,11 +378,32 @@ struct Response301WithHeader {
 };
 
 struct Response503WithConnDrop {
+  std::shared_ptr<std::size_t> responses = std::make_shared<std::size_t>(0);
+
   HttpResponse operator()(const HttpRequest&) const {
+    ++(*responses);
+
     return {
         "HTTP/1.1 503 Service Unavailable\r\n"
         "Content-Length: 0\r\n"
         "\r\n ",
+        HttpResponse::kWriteAndClose};
+  }
+};
+
+struct ResponseWithCustomCode {
+  std::size_t response_code;
+  std::shared_ptr<std::size_t> responses = std::make_shared<std::size_t>(0);
+
+  explicit ResponseWithCustomCode(size_t code) : response_code(code) {}
+
+  HttpResponse operator()(const HttpRequest&) const {
+    ++(*responses);
+
+    return {
+        fmt::format(
+            "HTTP/1.1 {} OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+            response_code),
         HttpResponse::kWriteAndClose};
   }
 };
@@ -564,6 +586,19 @@ std::string DifferentUrlsRetry(std::string data, clients::http::Client& http,
 /// [HTTP Client - reuse async]
 
 }  // namespace sample2
+
+utils::RetryBudgetSettings CreateRetryBudgetSettings(float max_tokens,
+                                                     float token_ratio,
+                                                     bool enabled) {
+  return utils::RetryBudgetSettings{max_tokens, token_ratio, enabled};
+}
+
+void UpdateDynamicConfig(std::shared_ptr<clients::http::Client> http_client_ptr,
+                         utils::RetryBudgetSettings retry_budget_settings) {
+  clients::http::impl::Config config;
+  config.retry_budget.settings = retry_budget_settings;
+  http_client_ptr->SetConfig(config);
+}
 
 }  // namespace
 
@@ -1319,6 +1354,136 @@ UTEST(HttpClient, Retry) {
   EXPECT_FALSE(response->IsOk());
   EXPECT_EQ(503, response->status_code());
   EXPECT_EQ(2, response->GetStats().retries_count);
+}
+
+UTEST(HttpClient, RetryBudgetAllFailedRequests) {
+  utils::impl::UserverExperimentsScope experiments;
+  experiments.Set(utils::impl::kHttpClientRetryBudgetExperiment, true);
+
+  const auto kMaxTokens = 10;
+  const auto kTokenRatio = 0.1f;
+
+  Response503WithConnDrop callback;
+  auto http_client_ptr = utest::CreateHttpClient();
+  const utest::SimpleServer server{callback};
+
+  UpdateDynamicConfig(http_client_ptr,
+                      CreateRetryBudgetSettings(kMaxTokens, kTokenRatio, true));
+
+  auto response = http_client_ptr->CreateRequest()
+                      .get(server.GetBaseUrl())
+                      .timeout(kTimeout)
+                      .retry(20)
+                      .perform();
+  EXPECT_FALSE(response->IsOk());
+  EXPECT_EQ(503, response->status_code());
+
+  EXPECT_EQ(5, *callback.responses);
+}
+
+UTEST(HttpClient, RetryBudgetRefill) {
+  utils::impl::UserverExperimentsScope experiments;
+  experiments.Set(utils::impl::kHttpClientRetryBudgetExperiment, true);
+
+  const auto kMaxTokens = 10;
+  const auto kTokenRatio = 0.1f;
+
+  auto http_client_ptr = utest::CreateHttpClient();
+
+  Response503WithConnDrop callback_503;
+  const utest::SimpleServer unavailable_server{callback_503};
+  ResponseWithCustomCode callback_202(202);
+  const utest::SimpleServer good_server{callback_202};
+
+  UpdateDynamicConfig(http_client_ptr,
+                      CreateRetryBudgetSettings(kMaxTokens, kTokenRatio, true));
+
+  {
+    auto response = http_client_ptr->CreateRequest()
+                        .get(unavailable_server.GetBaseUrl())
+                        .timeout(kTimeout)
+                        .retry(20)
+                        .perform();
+    EXPECT_FALSE(response->IsOk());
+    EXPECT_EQ(503, response->status_code());
+
+    EXPECT_EQ(5, *callback_503.responses);
+  }
+
+  // refill budget
+  for (size_t i = 0; i < 11; ++i) {
+    auto response = http_client_ptr->CreateRequest()
+                        .get(good_server.GetBaseUrl())
+                        .timeout(kTimeout)
+                        .retry(20)
+                        .perform();
+
+    EXPECT_FALSE(response->IsOk());
+    EXPECT_EQ(202, response->status_code());
+    EXPECT_EQ(0, response->GetStats().retries_count);
+
+    EXPECT_EQ(i + 1, *callback_202.responses);
+  }
+
+  auto response = http_client_ptr->CreateRequest()
+                      .get(unavailable_server.GetBaseUrl())
+                      .timeout(kTimeout)
+                      .retry(20)
+                      .perform();
+  EXPECT_FALSE(response->IsOk());
+  EXPECT_EQ(503, response->status_code());
+
+  EXPECT_EQ(7, *callback_503.responses);
+}
+
+UTEST(HttpClient, RetryBudgetNotRetriableErrors) {
+  utils::impl::UserverExperimentsScope experiments;
+  experiments.Set(utils::impl::kHttpClientRetryBudgetExperiment, true);
+
+  const auto kMaxTokens = 10;
+  const auto kTokenRatio = 0.1f;
+
+  auto http_client_ptr = utest::CreateHttpClient();
+
+  UpdateDynamicConfig(http_client_ptr,
+                      CreateRetryBudgetSettings(kMaxTokens, kTokenRatio, true));
+
+  const auto test_response_code =
+      [](std::shared_ptr<clients::http::Client> http_client_ptr,
+         size_t response_code) {
+        ResponseWithCustomCode callback(response_code);
+        const utest::SimpleServer server{callback};
+
+        auto response = http_client_ptr->CreateRequest()
+                            .get(server.GetBaseUrl())
+                            .timeout(kTimeout)
+                            .retry(20)
+                            .perform();
+
+        EXPECT_FALSE(response->IsOk());
+        EXPECT_EQ(response_code, response->status_code());
+        EXPECT_EQ(0, response->GetStats().retries_count);
+
+        EXPECT_EQ(1, *callback.responses);
+      };
+
+  // such response_code should not be retried
+  for (const auto& code : {202, 303, 404}) {
+    test_response_code(http_client_ptr, code);
+  }
+
+  // check that retry budget is still full
+  ResponseWithCustomCode callback(503);
+  const utest::SimpleServer server{callback};
+  auto response = http_client_ptr->CreateRequest()
+                      .get(server.GetBaseUrl())
+                      .timeout(kTimeout)
+                      .retry(20)
+                      .perform();
+  EXPECT_FALSE(response->IsOk());
+  EXPECT_EQ(503, response->status_code());
+
+  EXPECT_EQ(5, *callback.responses);
 }
 
 UTEST(HttpClient, TinyTimeout) {

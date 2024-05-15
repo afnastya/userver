@@ -72,12 +72,23 @@ constexpr dynamic_config::DefaultAsJsonString kThrottleDefaults{R"(
 }
 )"};
 
+constexpr dynamic_config::DefaultAsJsonString kRetryBudgetDefaults{R"(
+{
+  "settings": {
+    "max_tokens": 100.0,
+    "token_ratio": 0.1,
+    "enabled": false
+  }
+}
+)"};
+
 const dynamic_config::Key kClientConfig{
     clients::http::impl::ParseConfig,
     {
         {"HTTP_CLIENT_CONNECTION_POOL_SIZE", 1000},
         {"USERVER_HTTP_PROXY", ""},
         {"HTTP_CLIENT_CONNECT_THROTTLE", kThrottleDefaults},
+        {"HTTP_CLIENT_RETRY_BUDGET", kRetryBudgetDefaults},
     },
 };
 /// [docs map config sample]

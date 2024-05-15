@@ -233,6 +233,7 @@ void easy::reset() {
   LOG_TRACE() << "easy::reset start " << this;
 
   orig_url_str_.clear();
+  effective_url_host_.clear();
   std::string{}.swap(post_fields_);  // forced memory freeing
   form_.reset();
   if (headers_) headers_->clear();
@@ -640,6 +641,15 @@ void easy::handle_completion(const std::error_code& err) {
 
 void easy::mark_retry() { ++retries_count_; }
 
+bool easy::check_retry_budget() const {
+  return multi_->CheckRetryBudget(effective_url_host_);
+}
+
+void easy::update_retry_budget(const std::error_code& err,
+                               bool successful_response_code) {
+  multi_->UpdateRetryBudget(effective_url_host_, err, successful_response_code);
+}
+
 clients::http::LocalStats easy::get_local_stats() {
   clients::http::LocalStats stats;
 
@@ -781,6 +791,8 @@ native::curl_socket_t easy::opensocket(
       UASSERT_MSG(false, "Cannot get effective url: " + ec.message());
     }
 
+    self->set_retry_budget_factors(url.data());
+
     multi_handle->CheckRateLimit(url.data(), self->rate_limit_error_);
     if (self->rate_limit_error_) {
       multi_handle->Statistics().mark_socket_ratelimited();
@@ -805,6 +817,27 @@ native::curl_socket_t easy::opensocket(
 
   // unknown or invalid socket type
   return CURL_SOCKET_BAD;
+}
+
+void easy::set_retry_budget_factors(const char* url_str) {
+  std::error_code ec;
+  curl::url url;
+  url.SetUrl(url_str, ec);
+  if (ec) {
+    LOG_WARNING() << "Cannot parse effective URL in curl::easy: " << ec;
+    UASSERT_MSG(false,
+                "Cannot parse effective URL in curl::easy: " + ec.message());
+    return;
+  }
+
+  auto host_ptr = url.GetHostPtr(ec);
+  if (ec || !host_ptr) {
+    LOG_INFO() << "Cannot retrieve host from the effective URL: " << ec;
+    UASSERT_MSG(false,
+                "Cannot retrieve host from effective URL: " + ec.message());
+  } else {
+    effective_url_host_ = host_ptr.get();
+  }
 }
 
 int easy::closesocket(void* clientp, native::curl_socket_t item) noexcept {

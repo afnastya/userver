@@ -206,6 +206,7 @@ InstanceStatistics Client::GetMultiStatistics(size_t n) const {
   s.multi.socket_open.value = multi_stats.open_socket_total();
   s.multi.current_load = multi_stats.get_busy_storage().GetCurrentLoad();
   s.multi.socket_ratelimit.value = multi_stats.socket_ratelimited_total();
+  s.multi.request_retrylimit.value = multi_stats.request_retrylimited_total();
   return s;
 }
 
@@ -281,6 +282,10 @@ void Client::SetConfig(const impl::Config& config) {
   connect_rate_limiter_->SetPerHostLimits(
       config.throttle.per_host_connect_limit,
       config.throttle.per_host_connect_rate);
+
+  for (auto& multi : multis_) {
+    multi->SetRetryBudgetSettings(config.retry_budget.settings);
+  }
 
   proxy_.Assign(config.proxy);
 }

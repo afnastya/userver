@@ -139,6 +139,33 @@ void multi::CheckRateLimit(const char* url_str, std::error_code& ec) {
   connect_rate_limiter_->Check(url_str, ec);
 }
 
+void multi::SetRetryBudgetSettings(const utils::RetryBudgetSettings& settings) {
+  retry_budgets_.SetRetryBudgetSettings(settings);
+}
+
+bool multi::CheckRetryBudget(const std::string& host) {
+  if (retry_budgets_.CanRetry(host)) {
+    return true;
+  } else {
+    Statistics().mark_request_retrylimited();
+    return false;
+  }
+}
+
+void multi::UpdateRetryBudget(const std::string& host,
+                              const std::error_code& ec,
+                              bool successful_request) {
+  if (ec == std::make_error_code(std::errc::operation_canceled)) {
+    return;
+  }
+
+  if (ec || !successful_request) {
+    retry_budgets_.OnFailedRequest(host);
+  } else {
+    retry_budgets_.OnSuccessfulRequest(host);
+  }
+}
+
 void multi::SetMultiplexingEnabled(bool value) {
   SetOptionAsync(native::CURLMOPT_PIPELINING, value ? 1 : 0);
 }

@@ -30,6 +30,7 @@ namespace components {
 /// * @ref HTTP_CLIENT_CONNECT_THROTTLE
 /// * @ref HTTP_CLIENT_CONNECTION_POOL_SIZE
 /// * @ref USERVER_HTTP_PROXY
+/// * @ref HTTP_CLIENT_RETRY_BUDGET
 ///
 /// ## Static options:
 /// Name | Description | Default value

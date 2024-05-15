@@ -52,6 +52,7 @@ struct MultiStats {
   utils::statistics::Rate socket_open;
   utils::statistics::Rate socket_close;
   utils::statistics::Rate socket_ratelimit;
+  utils::statistics::Rate request_retrylimit;
   double current_load{0};
 
   MultiStats& operator+=(const MultiStats& other) {
@@ -59,6 +60,7 @@ struct MultiStats {
     socket_close += other.socket_close;
     socket_ratelimit += other.socket_ratelimit;
     current_load += other.current_load;
+    request_retrylimit += other.request_retrylimit;
     return *this;
   }
 };

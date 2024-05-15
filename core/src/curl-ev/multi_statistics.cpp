@@ -14,12 +14,18 @@ void MultiStatistics::mark_close_socket() { close_++; }
 
 void MultiStatistics::mark_socket_ratelimited() { ratelimited_++; }
 
+void MultiStatistics::mark_request_retrylimited() { retrylimited_++; }
+
 long long MultiStatistics::open_socket_total() const { return open_.load(); }
 
 long long MultiStatistics::close_socket_total() const { return close_.load(); }
 
 long long MultiStatistics::socket_ratelimited_total() const {
   return ratelimited_.load();
+}
+
+long long MultiStatistics::request_retrylimited_total() const {
+  return retrylimited_.load();
 }
 
 utils::statistics::BusyStorage& MultiStatistics::get_busy_storage() {

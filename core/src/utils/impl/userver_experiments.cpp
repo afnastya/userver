@@ -96,6 +96,8 @@ void UserverExperimentsScope::EnableOnly(
   }
 }
 
+UserverExperiment kHttpClientRetryBudgetExperiment{"http-client-retry-budget"};
+
 }  // namespace utils::impl
 
 USERVER_NAMESPACE_END

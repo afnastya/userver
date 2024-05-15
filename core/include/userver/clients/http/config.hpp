@@ -5,6 +5,7 @@
 
 #include <userver/dynamic_config/fwd.hpp>
 #include <userver/formats/json_fwd.hpp>
+#include <userver/utils/retry_budget.hpp>
 #include <userver/yaml_config/fwd.hpp>
 
 USERVER_NAMESPACE_BEGIN
@@ -16,6 +17,10 @@ class TracingManagerBase;
 namespace server::http {
 class HeadersPropagator;
 }  // namespace server::http
+
+namespace utils {
+struct RetryBudgetSettings;
+}  // namespace utils
 
 namespace clients::http {
 
@@ -63,6 +68,13 @@ struct ThrottleConfig final {
 ThrottleConfig Parse(const formats::json::Value& value,
                      formats::parse::To<ThrottleConfig>);
 
+struct RetryBudgetConfig final {
+  utils::RetryBudgetSettings settings{};
+};
+
+RetryBudgetConfig Parse(const formats::json::Value& value,
+                        formats::parse::To<RetryBudgetConfig>);
+
 // Dynamic config
 struct Config final {
   static constexpr std::size_t kDefaultConnectionPoolSize = 10000;
@@ -70,6 +82,7 @@ struct Config final {
   std::size_t connection_pool_size{kDefaultConnectionPoolSize};
   std::string proxy;
   ThrottleConfig throttle;
+  RetryBudgetConfig retry_budget;
 };
 
 Config ParseConfig(const dynamic_config::DocsMap& docs_map);
