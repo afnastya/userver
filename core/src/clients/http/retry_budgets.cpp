@@ -51,7 +51,7 @@ void RetryBudgets::OnFailedRequest(const std::string& destination) {
         retry_budgets.GetInfoByDestination(destination);
     destination_retry_budget->budget.AccountFail();
     destination_retry_budget->failed_cnt.fetch_add(1,
-                                                   std::memory_order_relaxed);
+                                                   std::memory_order_released);
   });
 }
 
@@ -142,7 +142,7 @@ void RetryBudgets::ReduceMapIfNecessary(DestinationsMap::RawMap& map) {
 
   // reset to zero all failed_cnt
   for (auto& [key, info] : map) {
-    info->failed_cnt.store(0, std::memory_order_relaxed);
+    info->failed_cnt.store(0, std::memory_order_released);
   }
 
   ++map_reduction_cnt_;
